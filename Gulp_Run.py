@@ -9,34 +9,52 @@ except:
     print 'You should install pymatgen first.'
     exit(0)
 
-import sys
+import sys, re
 from monty.io import zopen
 
-def Read_POSCAR( filen ):
+def gulp_average_energy(filen='log', lave=True):
+    #filen: Screen output of gulp
     with zopen(filen, "rt") as f:
         contents = f.read()
-    Cry_Str = IStructure.from_str(contents, fmt="poscar")
-    return Read_POSCAR
+    energy = Gulp.get_energy(contents)
+    if lave :
+        contents = open(filen,'r').readlines()
+        for line in contents:
+            if 'Total number atoms/shells' in line:
+                num = int(re.findall('\d+',line)[0])
+                break   
+    else:
+        num = 1
+    return energy/num
+
 
 if __name__ == '__main__':
-    Cry_Str = Structure.from_file("POSCAR")
-    #energy  = get_energy_buckingham(Cry_Str)
-    #print energy
     Gulp = GulpIO()
-    #gulpinput = Gulp.structure_lines(structure = Cry_Str)
-    #with open('gulpinput','w') as f:
-        #f.write(gulpinput)
-    
-    #with zopen('./out1', "rt") as f:
-        #contents = f.read()
 
-    #energy = Gulp.get_energy(contents)
-    #print energy
+    num = int(sys.argv[1])
+    if num == 1:
+        #write input file of gulp
+        Cry_Str = Structure.from_file("POSCAR")
+        with open('gulpinput','w') as f:
+            f.write(Gulp.keyword_line('opti conj conp nosymmetry qok'))
+            f.write(Gulp.keyword_line('switch_min bfgs gnorm 0.5\n'))
 
-    with zopen('gulpoutput', "rt") as f:
-        contents = f.read()
-    Opt_Str = Gulp.get_relaxed_structure(contents)
-    Vasp_Str = Poscar(Opt_Str)
-    Vasp_Str.write_file('out.vasp')
+            gulpinput = Gulp.structure_lines(structure = Cry_Str,symm_flg=False)
+            f.write(gulpinput)
 
+            f.write(Gulp.keyword_line('maxcyc 500'))
+            f.write(Gulp.keyword_line('library self_build.lib'))
+            f.write(Gulp.keyword_line('dump every gulpopt'))
 
+    if num == 2:
+        #output the energy
+        energy = gulp_average_energy()
+        print energy
+
+    if num == 3:
+        #output the relaxed structure
+        with zopen('log', "rt") as f:
+            contents = f.read()
+        Opt_Str = Gulp.get_relaxed_structure(contents)
+        Vasp_Str = Poscar(Opt_Str)
+        Vasp_Str.write_file('out.vasp')
